@@ -1,0 +1,28 @@
+# LTS Maker
+https://github.com/schonkopf/soundscape_IR/blob/master/soundscape_viewer/lts_maker.py
+
+# Multi-stage learning
+https://stats.stackexchange.com/questions/435507/multi-stage-neural-net
+https://www.kaggle.com/isbhargav/guide-to-pytorch-learning-rate-scheduling
+https://discuss.pytorch.org/t/joint-training-of-multiple-networks-with-different-losses/37529
+
+# VQ-VAE2
+https://github.com/rosinality/vq-vae-2-pytorch 
+https://github.com/SonyCSLParis/interactive-spectrogram-inpainting
+
+# VQ-VAE2 Issues/Important Points
+https://github.com/rosinality/vq-vae-2-pytorch/issues/58 (on mode collapse and possible solution)
+https://github.com/rosinality/vq-vae-2-pytorch/issues/57 (on moving average loss)
+https://github.com/SonyCSLParis/interactive-spectrogram-inpainting/blob/e0602e07602eb91fbe21e66e43bfdd9ff19a8950/interactive_spectrogram_inpainting/vqvae/bottleneck.py 
+(on Sonnet EMA/quantized bottleneck)
+https://github.com/rosinality/vq-vae-2-pytorch/issues/59 (on video frame w/ latent context)
+https://github.com/swasun/VQ-VAE-Speech 
+
+# Inpainting/refiner
+https://github.com/rlct1/DeepGIN 
+https://github.com/avalonstrel/GatedConvolution_pytorch (self-attention)
+https://github.com/csqiangwen/DeepFillv2_Pytorch (same as above with contextual attention?)
+
+# Video writer
+https://pythonexamples.org/python-opencv-cv2-create-video-from-images/
+
