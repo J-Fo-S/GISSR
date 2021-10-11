@@ -1,13 +1,10 @@
 import argparse
-
 import torch
 from torch import nn, optim
 #from torch.utils.data import DataLoader
-
 from torchvision import datasets, transforms, utils
-
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-
 from scheduler_vae import CycleScheduler
 
 # TO-DO: join this within train_ae func - no problem with tqdm and loader? 
@@ -40,15 +37,18 @@ def train_vae(train_loader, net=None, args=None, logger=None):
     # TO-DO: understand these variables and modify accordingly - see line 54-57 (..sample = img[:sample_size])
     latent_loss_weight = 0.25
     #sample_size = 25
+    # write hyper params to tensorboard
+    comment = f' batch_size = {args.batch_size} lr = {args.lr} schedule = {args.sched} latent_loss_weight = {latent_loss_weight}'
+    writer = SummaryWriter(comment=comment)
     net.train()
     for epoch in range(args.epochs):
         mse_sum = 0
         mse_n = 0
-        # TO-DO: see if tuple exists in audio data - remove if not
-        #for i, (img, label) in enumerate(loader):
-        #for i, (img, label) in enumerate(loader):
+        running_loss = 0
+        running_recon_loss = 0
+        running_latent_loss = 0
         with tqdm(train_loader, unit="batch") as tepoch:
-            for img in tepoch:
+            for i, img in enumerate(tepoch):
                 optimizer.zero_grad()
                 img = img.type(torch.cuda.FloatTensor)
                 out, latent_loss = net(img)
@@ -70,6 +70,36 @@ def train_vae(train_loader, net=None, args=None, logger=None):
                 if scheduler is not None:
                     scheduler.step()
                 optimizer.step()
+                
+                # tensorboard
+                running_loss += loss
+                running_recon_loss += recon_loss
+                running_latent_loss += latent_loss
+
+                if i % 10 == 9:    # every 1000 mini-batches...
+                    # ...log the running loss
+                    img_grid = utils.make_grid(img)
+                    # write to tensorboard
+                    writer.add_image('data samples', img_grid)
+                    writer.add_graph(net, img)
+                    writer.add_scalar('total training loss',
+                                    running_loss / 10,
+                                    epoch * len(tepoch) + i)
+                    writer.add_scalar('total recon loss',
+                                    running_recon_loss / 10,
+                                    epoch * len(tepoch) + i)
+                    writer.add_scalar('total latent loss',
+                                    running_latent_loss / 10,
+                                    epoch * len(tepoch) + i)
+                    for name, weight in net.named_parameters():
+                        writer.add_histogram(name,weight, epoch)
+                        writer.add_histogram(f'{name}.grad',weight.grad, epoch)
+
+                    # ...log a Matplotlib Figure showing the model's predictions on a
+                    # random mini-batch
+                    running_loss = 0.0
+                    running_recon_loss = 0.0
+                    running_latent_loss = 0.0
                 # TO-DO: may need to change below entirely for spec - see AE and Interactive Spectrogram code (Jukebox helpers)
                 #if i % 100 == 0:
                 #    model.eval()

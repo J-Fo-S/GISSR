@@ -14,6 +14,8 @@ class HL_dataset(Dataset):
         self.FFT_dict = FFT_dict
         self.args  = args
         for filepath in self.data_path_list:
+            # TO-DO: add lps_lts here? see https://pytorch.org/tutorials/beginner/basics/data_tutorial.html
+            # and here for map-style data loading https://pytorch.org/docs/stable/data.html#data-loading-order-and-sampler
             if args.data_feature=="lps" or args.data_feature=="lps_lts":
                 spec, phase, mean, std = wav2lps(filepath, self.FFT_dict['FFTSize'],  self.FFT_dict['Hop_length'],  self.FFT_dict['Win_length'],  self.FFT_dict['normalize'])
                 if args.prewhiten > 0: 
@@ -46,7 +48,7 @@ def hl_dataloader(data_path_list, batch_size=311, shuffle=False, num_workers=1, 
     return hl_dataloader
 
 def val_dataloader(filepath, FFT_dict, args=None):
-
+    # TO-DO: add dataloader for inference memory management
     lps, phase, mean, std = wav2lps(filepath, FFT_dict['FFTSize'], FFT_dict['Hop_length'], FFT_dict['Win_length'], FFT_dict['normalize'])
     if args.prewhiten > 0: 
         lps, _ = prewhiten(lps, args.prewhiten, 0)
