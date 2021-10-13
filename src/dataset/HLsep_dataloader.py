@@ -2,6 +2,7 @@ import sys
 sys.path.append('../')
 from torch.utils.data import DataLoader, Dataset
 from utils.signalprocess import wav2lps, lps2wav, wav_read
+from soundscape_IR.soundscape_viewer import lts_maker
 import numpy as np
 import scipy.io.wavfile as wav
 
@@ -16,7 +17,16 @@ class HL_dataset(Dataset):
         for filepath in self.data_path_list:
             # TO-DO: add lps_lts here? see https://pytorch.org/tutorials/beginner/basics/data_tutorial.html
             # and here for map-style data loading https://pytorch.org/docs/stable/data.html#data-loading-order-and-sampler
-            if args.data_feature=="lps" or args.data_feature=="lps_lts":
+            if args.data_feature=="lps":
+                spec, phase, mean, std = wav2lps(filepath, self.FFT_dict['FFTSize'],  self.FFT_dict['Hop_length'],  self.FFT_dict['Win_length'],  self.FFT_dict['normalize'])
+                if args.prewhiten > 0: 
+                    spec, _ = prewhiten(spec, args.prewhiten, 0)
+                    spec[spec<0] = 0
+                if args.model_type=="DAE_C" or "VQVAE":
+                    self.samples = np.reshape((spec.T), (-1,1,1,int(self.FFT_dict['FFTSize']/2+1)))[:,:,:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
+                else:
+                    self.samples = spec.T[:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
+            elif args.data_feature=="lps_lts":
                 spec, phase, mean, std = wav2lps(filepath, self.FFT_dict['FFTSize'],  self.FFT_dict['Hop_length'],  self.FFT_dict['Win_length'],  self.FFT_dict['normalize'])
                 if args.prewhiten > 0: 
                     spec, _ = prewhiten(spec, args.prewhiten, 0)
