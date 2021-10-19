@@ -159,10 +159,13 @@ if __name__ == "__main__":
     if args.pretrained == False:
         # data loader
         print(os.getcwd())
-        test_filelist = ["src/data/sesoko/Audio/B20/SSK_Site_B_20170601_174000.wav"]
+        #if args.model_type == 'VQVAE':
+        data_path_list = 'src/data/sesoko/Audio'
+        #else:
+        #    test_filelist = ["src/data/sesoko/Audio/B20/SSK_Site_B_20170601_174000.wav"]
         test_filename = "0_0"
         outdir = "{0}/test_".format(args.logdir)
-        train_loader = hl_dataloader(test_filelist, batch_size=args.batch_size, shuffle=True, num_workers=1, pin_memory=True, FFT_dict=FFT_dict, args=args)
+        train_loader = hl_dataloader(data_path_list, batch_size=args.batch_size, shuffle=True, num_workers=1, pin_memory=True, FFT_dict=FFT_dict, args=args)
         # train
         if args.model_type == 'VQVAE':
             net = train_vae.train_vae(train_loader, net, args, logger)
@@ -181,12 +184,17 @@ if __name__ == "__main__":
         # reconstruction test
         net.eval()
         with torch.no_grad():
-            for test_file in test_filelist:
-                # load test data
-                lps, phase, mean, std = val_dataloader(test_file, FFT_dict, args=args)
-                print(lps.shape)
-                #bc griffin-lim inversion needs fft/2+1
-                infer.infer(net, lps, phase, np.array(mean), np.array(std), FFT_dict, filedir=outdir, filename=test_filename, args=args)
+            for subdir, _, files in os.walk(data_path_list):
+                if files is not None:
+                    for filename in files:
+                        filepath = os.path.join(subdir, filename)  
+                        # load test data
+                        lps, phase, mean, std = val_dataloader(filepath, FFT_dict, args=args)
+                        print(lps.shape)
+                        #bc griffin-lim inversion needs fft/2+1
+                        infer.infer(net, lps, phase, np.array(mean), np.array(std), FFT_dict, filedir=outdir, filename=test_filename, args=args)
+                        exit()
+    # TO-DO: fix val_dataloader for proper data iteration
     else:
         net.load_state_dict(torch.load(args.pretrained_path))
         # data loader

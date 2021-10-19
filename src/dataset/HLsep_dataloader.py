@@ -1,43 +1,66 @@
 import sys
 sys.path.append('../')
+import os
 from torch.utils.data import DataLoader, Dataset
 from utils.signalprocess import wav2lps, lps2wav, wav_read
-from soundscape_IR.soundscape_viewer import lts_maker
+from utils.soundscape_viewer.lts_maker import lts_maker
 import numpy as np
 import scipy.io.wavfile as wav
-
 
 class HL_dataset(Dataset):
 
     def __init__(self, data_path_list, FFT_dict, args):
 
-        self.data_path_list = data_path_list
         self.FFT_dict = FFT_dict
         self.args  = args
-        for filepath in self.data_path_list:
-            # TO-DO: add lps_lts here? see https://pytorch.org/tutorials/beginner/basics/data_tutorial.html
-            # and here for map-style data loading https://pytorch.org/docs/stable/data.html#data-loading-order-and-sampler
-            if args.data_feature=="lps":
-                spec, phase, mean, std = wav2lps(filepath, self.FFT_dict['FFTSize'],  self.FFT_dict['Hop_length'],  self.FFT_dict['Win_length'],  self.FFT_dict['normalize'])
-                if args.prewhiten > 0: 
-                    spec, _ = prewhiten(spec, args.prewhiten, 0)
-                    spec[spec<0] = 0
-                if args.model_type=="DAE_C" or "VQVAE":
-                    self.samples = np.reshape((spec.T), (-1,1,1,int(self.FFT_dict['FFTSize']/2+1)))[:,:,:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
-                else:
-                    self.samples = spec.T[:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
-            elif args.data_feature=="lps_lts":
-                spec, phase, mean, std = wav2lps(filepath, self.FFT_dict['FFTSize'],  self.FFT_dict['Hop_length'],  self.FFT_dict['Win_length'],  self.FFT_dict['normalize'])
-                if args.prewhiten > 0: 
-                    spec, _ = prewhiten(spec, args.prewhiten, 0)
-                    spec[spec<0] = 0
-                if args.model_type=="DAE_C" or "VQVAE":
-                    self.samples = np.reshape((spec.T), (-1,1,1,int(self.FFT_dict['FFTSize']/2+1)))[:,:,:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
-                else:
-                    self.samples = spec.T[:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
-            else:
-                y = wav_read(filepath)
-                self.samples = np.reshape(y, (-1,1,1,y.shape[0]))
+        # TO-DO: filepath misnomer for file - in lts_lps mode need rewrite to.. 
+        # make a list containing the path to all wav files
+        # see https://pytorch.org/tutorials/beginner/basics/data_tutorial.html
+        # and here for map-style data loading https://pytorch.org/docs/stable/data.html#data-loading-order-and-sampler
+        self.data_path_list =  data_path_list
+        if args.data_feature=="lps_lts":
+            for subdir, _, files in os.walk(self.data_path_list):
+                print(f'{subdir} {files}')
+                if files:
+                    LTS_run=lts_maker(sensitivity=0, channel=1, environment='wat', FFT_size=self.FFT_dict['FFTSize'], 
+                        window_overlap=self.FFT_dict['Hop_length']/self.FFT_dict['FFTSize'], initial_skip=0)
+                    LTS_run.collect_folder(path=subdir)
+                    LTS_run.filename_check(dateformat='yyyymmdd_HHMMSS',initial='1207984160.',year_initial=2000)
+                    LTS_run.run(save_filename='LTS.mat')
+                    for filename in files:
+                        filepath = os.path.join(subdir, filename)  
+                        spec, _, _, _ = wav2lps(filepath, self.FFT_dict['FFTSize'],  self.FFT_dict['Hop_length'],  self.FFT_dict['Win_length'],  self.FFT_dict['normalize'])
+                        if args.prewhiten > 0: 
+                            spec, _ = prewhiten(spec, args.prewhiten, 0)
+                            spec[spec<0] = 0
+                        if args.model_type=="DAE_C" or "VQVAE":
+                            self.samples = np.reshape((spec.T), (-1,1,1,int(self.FFT_dict['FFTSize']/2+1)))[:,:,:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
+                        else:
+                            self.samples = spec.T[:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
+        elif args.data_feature=="lps":
+            for subdir, _, files in os.walk(self.data_path_list):
+                print(f'{subdir} {files}')
+                if files:
+                    for filename in files:
+                        filepath = os.path.join(subdir, filename)  
+                        spec, _, _, _ = wav2lps(filepath, self.FFT_dict['FFTSize'],  self.FFT_dict['Hop_length'],  self.FFT_dict['Win_length'],  self.FFT_dict['normalize'])
+                        if args.prewhiten > 0: 
+                            spec, _ = prewhiten(spec, args.prewhiten, 0)
+                            spec[spec<0] = 0
+                        if args.model_type=="DAE_C" or "VQVAE":
+                            self.samples = np.reshape((spec.T), (-1,1,1,int(self.FFT_dict['FFTSize']/2+1)))[:,:,:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
+                        else:
+                            self.samples = spec.T[:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
+        else:
+            for subdir, _, files in os.walk(self.data_path_list):
+                for filename in files:
+                    filepath = os.path.join(subdir, filename)  
+                    spec, _, _, _ = wav2lps(filepath, self.FFT_dict['FFTSize'],  self.FFT_dict['Hop_length'],  self.FFT_dict['Win_length'],  self.FFT_dict['normalize'])
+                    if args.prewhiten > 0: 
+                        spec, _ = prewhiten(spec, args.prewhiten, 0)
+                        spec[spec<0] = 0
+                    y = wav_read(filepath)
+                    self.samples = np.reshape(y, (-1,1,1,y.shape[0]))
 
 
     def __getitem__(self, index):
@@ -53,6 +76,8 @@ class HL_dataset(Dataset):
 def hl_dataloader(data_path_list, batch_size=311, shuffle=False, num_workers=1, pin_memory=True, FFT_dict=None, args=None):
 
     hl_dataset = HL_dataset(data_path_list, FFT_dict, args)
+    # TO-DO: shuffle true here and False in dataset? Leave for now.. 
+    # see: https://discuss.pytorch.org/t/dataloader-just-shuffles-the-order-of-batches-or-does-it-also-shuffle-the-images-in-each-batch/60900/11
     hl_dataloader = DataLoader(hl_dataset, batch_size = batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
     return hl_dataloader
