@@ -25,7 +25,7 @@ class PrintLayer(nn.Module):
     def __init__(self):
         super(PrintLayer, self).__init__()
     
-    def forward(self, x):
+    def forward(self, x, y=None):
         # Do your print / debug stuff here
         print(x.shape)
         return x
@@ -162,7 +162,7 @@ class Decoder(nn.Module):
         return self.blocks(input)
 
 
-class VQVAE(nn.Module):
+class VQVAE_C(nn.Module):
     # Conversions to figure out: in_channel to 1? padding for what? filters to 3x1? DAE_C feature_dim pointless - only for FCN?
     # keep bottom/top encoders and add decoder?
     # TO-DO: add model_dict and args
@@ -204,7 +204,7 @@ class VQVAE(nn.Module):
             stride=4,
         )
 
-    def forward(self, input_0, input_1 = None):
+    def forward(self, input_0, input_1):
         #if self.args.data_feature=="lps_lts":
         #    _, quant_b_lps, diff_lps, _, _ = self.encode(input[0])
         #    quant_t_lts, _, diff_lts, _, _ = self.encode(input[1])
@@ -212,7 +212,6 @@ class VQVAE(nn.Module):
         #    diff = diff_lps + diff_lts
         #else:
         if self.args.data_feature=="lps_lts":
-            print(input_1.shape)
             quant_t, quant_b, diff, _, _ = self.encode_c(input_0, input_1)
         else:
             quant_t, quant_b, diff, _, _ = self.encode(input_0)

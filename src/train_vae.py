@@ -50,13 +50,23 @@ def train_vae(train_loader, net=None, args=None, logger=None):
         with tqdm(train_loader, unit="batch") as tepoch:
             for i, img in enumerate(tepoch):
                 optimizer.zero_grad()
-                img = img.type(torch.cuda.FloatTensor)
-                out, latent_loss = net(img)
-                recon_loss = criterion(out, img)
-                loss = recon_loss + latent_loss_weight * latent_loss.mean()
-                loss.backward()
-                mse_sum += recon_loss.item() * img.shape[0]
-                mse_n += img.shape[0]
+                if args.data_feature=="lps_lts" and args.model_type == 'VQVAE_C':
+                    img_0 = img[0].type(torch.cuda.FloatTensor)
+                    img_1 = img[1].type(torch.cuda.FloatTensor)
+                    out, latent_loss = net(img_0, img_1)
+                    recon_loss = criterion(out, img_0)
+                    loss = recon_loss + latent_loss_weight * latent_loss.mean()
+                    loss.backward()
+                    mse_sum += recon_loss.item() * img_0.shape[0]
+                    mse_n += img_0.shape[0]
+                else:
+                    img = img.type(torch.cuda.FloatTensor)
+                    out, latent_loss = net(img)
+                    recon_loss = criterion(out, img)
+                    loss = recon_loss + latent_loss_weight * latent_loss.mean()
+                    loss.backward()
+                    mse_sum += recon_loss.item() * img.shape[0]
+                    mse_n += img.shape[0]
 
                 lr = optimizer.param_groups[0]['lr']
 
@@ -76,20 +86,27 @@ def train_vae(train_loader, net=None, args=None, logger=None):
                 running_recon_loss += recon_loss
                 running_latent_loss += latent_loss
 
-                if i % 10 == 9:    # every 1000 mini-batches...
+                if i % 100 == 99:    # every 100 mini-batches...
                     # ...log the running loss
-                    img_grid = utils.make_grid(img)
-                    # write to tensorboard
-                    writer.add_image('data samples', img_grid)
-                    writer.add_graph(net, img)
+                    if args.data_feature=="lps_lts" and args.model_type=='VQVAE_C':
+                        img_grid_0 = utils.make_grid(img_0)
+                        writer.add_image('data samples', img_grid_0)
+                        img_grid_1 = utils.make_grid(img_1)
+                        writer.add_image('data samples', img_grid_1)
+                        # NOTE: sucky pytorch tensorboard requires tuple here but positional args in model!!
+                        writer.add_graph(net, (img_0, img_1))
+                    else:
+                        img_grid_0 = utils.make_grid(img)
+                        writer.add_image('data samples', img_grid_0)
+                        writer.add_graph(net, img)
                     writer.add_scalar('total training loss',
-                                    running_loss / 10,
+                                    running_loss / 100,
                                     epoch * len(tepoch) + i)
                     writer.add_scalar('total recon loss',
-                                    running_recon_loss / 10,
+                                    running_recon_loss / 100,
                                     epoch * len(tepoch) + i)
                     writer.add_scalar('total latent loss',
-                                    running_latent_loss / 10,
+                                    running_latent_loss / 100,
                                     epoch * len(tepoch) + i)
                     for name, weight in net.named_parameters():
                         writer.add_histogram(name,weight, epoch)

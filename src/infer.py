@@ -73,14 +73,24 @@ def infer(net, lps, phase,  mean, std, FFT_dict, filedir=None, filename=None, ar
     #result = torch.tensor(input).float().cuda()
     
     # Inverse separated sources of log power spectrum to waveform.
-    result = np.zeros(lps.shape)
-    lps = np.reshape((lps.T), (-1, 1, 1, int(FFT_dict['FFTSize']/2+1)))[:, :, :,FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1]]
-    lps = torch.tensor(lps).cuda().float()
-    if args.model_type == 'VQVAE':
-        output, _ = net(lps)
+    if args.model_type == "VQVAE_C":
+        lts = lps[1]
+        lps = lps[0]
+        result = np.zeros(lps.shape)
+        lps = np.reshape((lps.T), (-1, 1, 1, int(FFT_dict['FFTSize']/2+1)))[:, :, :,FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1]]
+        lts = np.reshape((lts.T), (-1, 1, 1, int(FFT_dict['FFTSize']/2+1)))[:, :, :,FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1]]
+        lps = torch.tensor(lps).cuda().float()
+        lts = torch.tensor(lts).cuda().float()
+        output, _ = net(lps, lts)
     else:
-        output = net(lps)
-    print(output.shape)
+        result = np.zeros(lps.shape)
+        lps = np.reshape((lps.T), (-1, 1, 1, int(FFT_dict['FFTSize']/2+1)))[:, :, :,FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1]]
+        lps = torch.tensor(lps).cuda().float()
+        if args.model_type == 'VQVAE':
+            output, _ = net(lps)
+        else:
+            output = net(lps)
+        print(output.shape)
     output = output.permute((1,2,3,0))
     output = torch.squeeze(output,0)
     output = torch.squeeze(output,0).detach().cpu()
@@ -94,6 +104,7 @@ def infer(net, lps, phase,  mean, std, FFT_dict, filedir=None, filename=None, ar
     if not os.path.exists(result_path):
         os.makedirs(result_path)
     wav.write("{0}{1}.wav".format(result_path,  filename), FFT_dict['sr'], result)
+    print(result_path+filename)
 
 # TO-DO: all below needs fix/refactor
 # necessary?

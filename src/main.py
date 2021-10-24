@@ -21,20 +21,23 @@ from torch.autograd import Variable
 from torchinfo import summary
 from datetime import datetime
 import numpy as np
-from model import DAE_C, DAE_F, VQVAE
+from model import DAE_C, DAE_F, VQVAE, VQVAE_C
 import train_ae, train_vae, infer
 from source_separation import MFA
-from dataset.HLsep_dataloader import hl_dataloader, val_dataloader
+from dataset.HLsep_dataloader import hl_dataloader, val_dataloader, prewhiten
+from utils.soundscape_viewer.lts_maker import lts_maker
 import scipy.io.wavfile as wav
+from scipy.io import loadmat
 import os
 import sys
 
 # parser#
 
 parser = argparse.ArgumentParser(description='PyTorch Source Separation')
-parser.add_argument('--model_type', type=str, default='DAE_C', help='model type', choices=['DAE_C', 'DAE_F', 'VQVAE'])
+parser.add_argument('--model_type', type=str, default='DAE_C', help='model type', choices=['DAE_C', 'DAE_F', 'VQVAE', 'VQVAE_C'])
 parser.add_argument('--data_feature', type=str, default='lps', help='lps or wavform')
 parser.add_argument('--pretrained', dest='pretrained', default=False, action='store_true', help='load pretrained model or not')
+parser.add_argument('--preproc_lts', dest='preproc_lts', default=False, action='store_true', help='use if need to preprocess lts files')
 parser.add_argument('--pretrained_path', type=str, default="log/default/VQVAE_20211001_1627.pth", help='pretrained_model path')
 # training hyperparameters
 parser.add_argument('--optim', type=str, default="Adam", help='optimizer for training', choices=['RMSprop', 'SGD', 'Adam'])
@@ -121,16 +124,20 @@ DAE_F_dict = {
 #TO-DO: make model dict for VQ-VAE
 VQVAE_dict = {}
 
+VQVAE_C_dict = {}
+
 Model = {
     'DAE_C': DAE_C.autoencoder,
     'DAE_F': DAE_F.autoencoder,
-    'VQVAE': VQVAE.VQVAE
+    'VQVAE': VQVAE.VQVAE,
+    'VQVAE_C': VQVAE_C.VQVAE_C
 }
 
 model_dict = {
     'DAE_C': DAE_C_dict,
     'DAE_F': DAE_F_dict,
-    'VQVAE': VQVAE_dict
+    'VQVAE': VQVAE_dict,
+    'VQVAE_C': VQVAE_C_dict
 }
 
 
@@ -153,7 +160,8 @@ if args.cuda:
     torch.cuda.manual_seed(args.seed)
     net.cuda()
 
-summary(net, input_size=(args.batch_size, 1, 1, args.size))
+#summary(net, input_size=(args.batch_size, 1, 1, args.size))
+#print(torch.cuda.memory_summary(device=None, abbreviated=False))
 
 if __name__ == "__main__":
     if args.pretrained == False:
@@ -167,7 +175,7 @@ if __name__ == "__main__":
         outdir = "{0}/test_".format(args.logdir)
         train_loader = hl_dataloader(data_path_list, batch_size=args.batch_size, shuffle=True, num_workers=1, pin_memory=True, FFT_dict=FFT_dict, args=args)
         # train
-        if args.model_type == 'VQVAE':
+        if args.model_type == 'VQVAE' or 'VQVAE_C':
             net = train_vae.train_vae(train_loader, net, args, logger)
         else:
             net = train_ae.train_ae(train_loader, net, args, logger)
@@ -185,15 +193,33 @@ if __name__ == "__main__":
         net.eval()
         with torch.no_grad():
             for subdir, _, files in os.walk(data_path_list):
-                if files is not None:
+                if files:
+                    if args.model_type == "VAEVQ_C" and not args.preproc_lts:
+                        LTS_run=lts_maker(sensitivity=0, channel=1, environment='wat', FFT_size=FFT_dict['FFTSize'], 
+                            window_overlap=FFT_dict['Hop_length']/FFT_dict['FFTSize'], initial_skip=0)
+                        LTS_run.collect_folder(path=subdir)
+                        LTS_run.filename_check(dateformat='yyyymmdd_HHMMSS',initial='1207984160.',year_initial=2000)
+                        LTS_run.run(save_filename='separate', folder_id=subdir)
                     for filename in files:
-                        filepath = os.path.join(subdir, filename)  
-                        # load test data
-                        lps, phase, mean, std = val_dataloader(filepath, FFT_dict, args=args)
-                        print(lps.shape)
-                        #bc griffin-lim inversion needs fft/2+1
-                        infer.infer(net, lps, phase, np.array(mean), np.array(std), FFT_dict, filedir=outdir, filename=test_filename, args=args)
-                        exit()
+                        if filename.endswith('.wav'):
+                            filepath = os.path.join(subdir, filename)  
+                            # load test data
+                            spec, phase, mean, std = val_dataloader(filepath, FFT_dict, args=args)
+                            print(spec.shape)
+                            if args.prewhiten > 0: 
+                                spec, _ = prewhiten(spec, args.prewhiten, 0)
+                                spec[spec<0] = 0
+                            if not os.path.exists(filepath[:-4]+'.mat'):
+                                print("preprocess LTS first!")
+                                exit()
+                            LTS = loadmat(filepath[:-4]+'.mat')
+                            LTS_mean = LTS['mean']
+                            LTS_mean = np.tile(LTS_mean[0,1:], (1, spec.shape[1]))
+                            #bc griffin-lim inversion needs fft/2+1
+                            if args.model_type == "VQVAE_C":
+                                spec = (spec, LTS_mean)
+                            infer.infer(net, spec, phase, np.array(mean), np.array(std), FFT_dict, filedir=outdir, filename=test_filename, args=args)
+                            exit()
     # TO-DO: fix val_dataloader for proper data iteration
     else:
         net.load_state_dict(torch.load(args.pretrained_path))

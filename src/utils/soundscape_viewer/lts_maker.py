@@ -229,8 +229,13 @@ class lts_maker:
     if folder_id:
       Gdrive=gdrive_handle(folder_id, status_print=True)
       Gdrive.upload(save_filename, status_print=True)
+  
+  def save_lts_separate(self, num_file, folder_id=[], status_print=True):
+    for i in range(num_file):
+      savemat(os.path.join(folder_id, self.audioname[i])[:-4]+'.mat', {'mean':self.Result_mean[i,:], 'median':self.Result_median[i,:]})
+      print('Successifully save to '+self.audioname[i])
     
-  def run(self, save_filename='LTS.mat', folder_id=[], file_begin=0, num_file=[], duration_read=[]):
+  def run(self, save_filename=None, folder_id=[], file_begin=0, num_file=[], duration_read=[]):
     import audioread
     import librosa
     import scipy.signal
@@ -297,4 +302,7 @@ class lts_maker:
     self.Result_mean=self.Result_mean[temp,:]
     if len(self.Result_PI)>0:
       self.Result_PI=self.Result_PI[temp,:]
-    self.save_lts(save_filename, folder_id)
+    if save_filename == 'separate':
+      self.save_lts_separate(len(temp), folder_id)
+    else:
+      self.save_lts(save_filename, folder_id)
