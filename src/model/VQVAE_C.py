@@ -182,8 +182,6 @@ class VQVAE_C(nn.Module):
         super().__init__()
         self.args = args
         self.enc_b = Encoder(in_channel, channel, n_res_block, n_res_channel, stride=4)
-        if self.args.data_feature=="lps_lts":
-            self.enc_bc = Encoder(in_channel, channel, n_res_block, n_res_channel, stride=4)
         self.enc_t = Encoder(channel, channel, n_res_block, n_res_channel, stride=2)
         self.quantize_conv_t = nn.Conv2d(channel, embed_dim, 1)
         self.quantize_t = Quantize(embed_dim, n_embed)
@@ -195,6 +193,10 @@ class VQVAE_C(nn.Module):
         self.upsample_t = nn.ConvTranspose2d(
             embed_dim, embed_dim, (1, 4), stride=2, padding=(0,1)
         )
+        if self.args.data_feature=="lps_lts":
+            self.enc_bc = Encoder(in_channel, channel, n_res_block, n_res_channel, stride=4)
+            self.quantize_conv_bc = nn.Conv2d(channel, embed_dim, 1)
+            self.quantize_bc = Quantize(embed_dim, n_embed)
         self.dec = Decoder(
             embed_dim + embed_dim,
             in_channel,
@@ -212,7 +214,7 @@ class VQVAE_C(nn.Module):
         #    diff = diff_lps + diff_lts
         #else:
         if self.args.data_feature=="lps_lts":
-            quant_t, quant_b, diff, _, _ = self.encode_c(input_0, input_1)
+            quant_t, quant_b, diff, _, _, _ = self.encode_c(input_1, input_0)
         else:
             quant_t, quant_b, diff, _, _ = self.encode(input_0)
         dec = self.decode(quant_t, quant_b)
@@ -254,7 +256,12 @@ class VQVAE_C(nn.Module):
         quant_b = quant_b.permute(0, 3, 1, 2)
         diff_b = diff_b.unsqueeze(0)
 
-        return quant_t, quant_b, diff_t + diff_b, id_t, id_b
+        quant_bc = self.quantize_conv_bc(enc_bc).permute(0, 2, 3, 1)
+        quant_bc, diff_bc, id_bc = self.quantize_bc(quant_bc)
+        quant_bc = quant_bc.permute(0, 3, 1, 2)
+        diff_bc = diff_bc.unsqueeze(0)
+
+        return quant_t, quant_b, diff_t + diff_b + diff_bc, id_t, id_b, id_bc
 
     def decode(self, quant_t, quant_b):
         upsample_t = self.upsample_t(quant_t)
