@@ -2,7 +2,7 @@ import argparse
 import torch
 from torch import nn, optim
 #from torch.utils.data import DataLoader
-from torchvision import datasets, transforms, utils
+from torchvision import utils
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from scheduler_vae import CycleScheduler
@@ -11,22 +11,7 @@ from scheduler_vae import CycleScheduler
 
 def train_vae(train_loader, net=None, args=None, logger=None):
     # NOTE: removed for now bc part of vq-vae image dataloader
-    #transform = transforms.Compose(
-    #    [
-    #        transforms.Resize(args.size),
-    #        transforms.CenterCrop(args.size),
-    #        transforms.ToTensor(),
-    #        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
-    #    ]
-    #)
     
-    device = 'cuda'
-    #dataset = datasets.ImageFolder(args.path, transform=transform)
-    #loader = DataLoader(dataset, batch_size=128, shuffle=True, num_workers=4)
-    #loader = tqdm(loader)
-    #model = VQVAE().to(device)
-    #train_loader = tqdm(train_loader)
-
     optimizer = optim.Adam(net.parameters(), lr=args.lr)
     scheduler = None
     if args.sched == 'cycle':
@@ -53,8 +38,9 @@ def train_vae(train_loader, net=None, args=None, logger=None):
                 if args.data_feature=="lps_lts" and args.model_type == 'VQVAE_C':
                     img_0 = img[0].type(torch.cuda.FloatTensor)
                     img_1 = img[1].type(torch.cuda.FloatTensor)
+                    img_2 = img[2].type(torch.cuda.FloatTensor)
                     out, latent_loss = net(img_0, img_1)
-                    recon_loss = criterion(out, img_0)
+                    recon_loss = criterion(out, img_2)
                     loss = recon_loss + latent_loss_weight * latent_loss.mean()
                     loss.backward()
                     mse_sum += recon_loss.item() * img_0.shape[0]

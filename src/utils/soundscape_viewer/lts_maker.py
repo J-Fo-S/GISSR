@@ -233,6 +233,7 @@ class lts_maker:
   def save_lts_separate(self, num_file, folder_id=[], status_print=True):
     for i in range(num_file):
       savemat(os.path.join(folder_id, self.audioname[i])[:-4]+'.mat', {'mean':self.Result_mean[i,:], 'median':self.Result_median[i,:]})
+      print(self.Result_median[i,:5])
       print('Successifully save to '+self.audioname[i])
     
   def run(self, save_filename=None, folder_id=[], file_begin=0, num_file=[], duration_read=[]):
@@ -271,6 +272,7 @@ class lts_maker:
         with audioread.audio_open(path+'/'+self.audioname[file]) as temp:
           sf=temp.samplerate
       x, self.sf = librosa.load(path+'/'+self.audioname[file], sr=sf)
+      #print(x[5000:5005])
 
       if duration_read:
         total_segment=int(np.ceil(len(x)/sf/duration_read))
@@ -288,8 +290,23 @@ class lts_maker:
         if read_interval[1]>len(x):
           read_interval[1]=len(x)
         if (read_interval[1]-read_interval[0])>(0.5*self.time_resolution*sf):
+          #if save_filename == 'separate':
+          #  x = x/32767.
+          #  epsilon = np.finfo(float).eps
+          #  print(self.overlap)
+          #  D = librosa.stft(x[int(read_interval[0]):int(read_interval[1])], n_fft = self.FFT_size, hop_length = self.overlap, win_length = self.FFT_size, window = scipy.signal.hamming, center = False)
+          #  D = D + epsilon
+          #  Sxx = np.log10(abs(D)**2)
+          #  mean = np.mean(Sxx, axis=1).reshape(-1,1)
+          #  std = np.std(Sxx, axis=1, dtype = np.float32, ddof=1).reshape(-1,1)
+          #  Sxx = (Sxx - mean)/std
+          #  self.time_vec=self.time_vec+duration_read*segment_run
+          #  print(Sxx.shape)
+          #  print(Sxx[1].shape)
+          #  self.compress_spectrogram(Sxx.T, Sxx[1], self.time_resolution, linear_scale=True)
+          #else:
           self.f,t,P = scipy.signal.spectrogram(x[int(read_interval[0]):int(read_interval[1])], fs=sf, window=('hann'), nperseg=self.FFT_size, 
-                                         noverlap=self.overlap, nfft=self.FFT_size, return_onesided=True, mode='psd')
+                                        noverlap=self.overlap, nfft=self.FFT_size, return_onesided=True, mode='psd')
           P = P/np.power(self.pref,2)
           self.time_vec=self.time_vec+duration_read*segment_run
           self.compress_spectrogram(P.T, t, self.time_resolution, linear_scale=True)

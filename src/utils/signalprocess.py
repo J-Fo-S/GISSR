@@ -22,7 +22,6 @@ def Filter(data, sr = 16000):
 
 def wav_read(filename):
     sr, y = wav.read(filename)
-    y = y/32767.
     return y
 
 
@@ -33,7 +32,10 @@ def wav2lps(y, FFTSize = 512, Hop_length = 256, Win_length = 512, normalize = Fa
     if (type(y)==str):
         # y = wav filepath of y is signal
         sr, y = wav.read(y)
-        y = y/32767.
+    y = y/32767.
+    #print(y[5000:5005])
+    if y.shape[1] > 1:
+        y = (y[:,0]+y[:,1]/2)
     epsilon = np.finfo(float).eps
     D = librosa.stft(y, n_fft = FFTSize, hop_length = Hop_length, win_length = Win_length, window = scipy.signal.hamming, center = Center)
     D = D + epsilon

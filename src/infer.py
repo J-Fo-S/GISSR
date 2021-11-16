@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 # Author:Wei-Chien Wang
 
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import matplotlib.pyplot as plt
+import librosa.display
 import sys
 import torch
 import numpy as np
@@ -9,7 +12,7 @@ import scipy
 import os
 import scipy.io.wavfile as wav
 import cv2
-from utils.signalprocess import lps2wav
+from dataset.HLsep_dataloader import save_test
 sys.path.append('../')
 
 def bin_ndarray(ndarray, new_shape, operation='sum'):
@@ -48,7 +51,7 @@ def bin_ndarray(ndarray, new_shape, operation='sum'):
         ndarray = op(-1*(i+1))
     return ndarray
 
-def infer(net, lps, phase,  mean, std, FFT_dict, filedir=None, filename=None, args=None):
+def infer(net, lps, phase,  mean, std, FFT_dict, result, filedir=None, filename=None, args=None):
     """
         Argument:
             input: npArray. 
@@ -76,27 +79,24 @@ def infer(net, lps, phase,  mean, std, FFT_dict, filedir=None, filename=None, ar
     if args.model_type == "VQVAE_C":
         lts = lps[1]
         lps = lps[0]
-        result = np.zeros(lps.shape)
-        lps = np.reshape((lps.T), (-1, 1, 1, int(FFT_dict['FFTSize']/2+1)))[:, :, :,FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1]]
-        lts = np.reshape((lts.T), (-1, 1, 1, int(FFT_dict['FFTSize']/2+1)))[:, :, :,FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1]]
+        #result = np.zeros(lps.shape)
         lps = torch.tensor(lps).cuda().float()
         lts = torch.tensor(lts).cuda().float()
         output, _ = net(lps, lts)
     else:
-        result = np.zeros(lps.shape)
         lps = np.reshape((lps.T), (-1, 1, 1, int(FFT_dict['FFTSize']/2+1)))[:, :, :,FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1]]
         lps = torch.tensor(lps).cuda().float()
         if args.model_type == 'VQVAE':
             output, _ = net(lps)
         else:
             output = net(lps)
-        print(output.shape)
     output = output.permute((1,2,3,0))
     output = torch.squeeze(output,0)
     output = torch.squeeze(output,0).detach().cpu()
+    save_test(output, filename='out_test.png')
     result[FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1], :] = np.array(output[:, :])
     result = np.sqrt(10**(result*std+mean))
-    result = np.multiply(result, phase)
+    result = np.multiply(result, phase[:,:result[1].size])
     #Result = input
     result = librosa.istft(result, hop_length=FFT_dict['Hop_length'], win_length=FFT_dict['Win_length'], window=scipy.signal.hamming, center=False)
     result = np.int16(result*32768)

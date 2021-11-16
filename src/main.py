@@ -17,15 +17,15 @@ import argparse
 import time
 from utils import misc
 import torch
-from torch.autograd import Variable
-from torchinfo import summary
+import torchaudio.transforms as T
 from datetime import datetime
 import numpy as np
 from model import DAE_C, DAE_F, VQVAE, VQVAE_C
 import train_ae, train_vae, infer
 from source_separation import MFA
-from dataset.HLsep_dataloader import hl_dataloader, val_dataloader, prewhiten
+from dataset.HLsep_dataloader import hl_dataloader, val_dataloader, prewhiten, save_test
 from utils.soundscape_viewer.lts_maker import lts_maker
+from utils.signalprocess import wav2lps
 import scipy.io.wavfile as wav
 from scipy.io import loadmat
 import os
@@ -192,34 +192,60 @@ if __name__ == "__main__":
         # reconstruction test
         net.eval()
         with torch.no_grad():
-            for subdir, _, files in os.walk(data_path_list):
-                if files:
-                    if args.model_type == "VAEVQ_C" and not args.preproc_lts:
-                        LTS_run=lts_maker(sensitivity=0, channel=1, environment='wat', FFT_size=FFT_dict['FFTSize'], 
-                            window_overlap=FFT_dict['Hop_length']/FFT_dict['FFTSize'], initial_skip=0)
-                        LTS_run.collect_folder(path=subdir)
-                        LTS_run.filename_check(dateformat='yyyymmdd_HHMMSS',initial='1207984160.',year_initial=2000)
-                        LTS_run.run(save_filename='separate', folder_id=subdir)
-                    for filename in files:
-                        if filename.endswith('.wav'):
-                            filepath = os.path.join(subdir, filename)  
-                            # load test data
-                            spec, phase, mean, std = val_dataloader(filepath, FFT_dict, args=args)
-                            print(spec.shape)
-                            if args.prewhiten > 0: 
-                                spec, _ = prewhiten(spec, args.prewhiten, 0)
-                                spec[spec<0] = 0
-                            if not os.path.exists(filepath[:-4]+'.mat'):
-                                print("preprocess LTS first!")
+            if args.data_feature=="lps_lts":
+                for subdir, _, files in os.walk(data_path_list):
+                    print(f'{subdir} {files}')
+                    if files: 
+                        if not args.preproc_lts:
+                            LTS_run=lts_maker(sensitivity=-100, channel=1, environment='wat', FFT_size=FFT_dict['FFTSize'], 
+                                window_overlap=FFT_dict['Hop_length']/FFT_dict['FFTSize'], initial_skip=0)
+                            LTS_run.collect_folder(path=subdir)
+                            LTS_run.filename_check(dateformat='yyyymmdd_HHMMSS',initial='1207984160.',year_initial=2000)
+                            LTS_run.run(save_filename='separate', folder_id=subdir)
+                        for filename in files:
+                            if filename.endswith('.wav'):
+                                filepath = os.path.join(subdir, filename)  
+                                spec, phase, mean, std = wav2lps(filepath, FFT_dict['FFTSize'],  FFT_dict['Hop_length'],  FFT_dict['Win_length'],  FFT_dict['normalize'])
+                                if args.prewhiten > 0: 
+                                    spec, _ = prewhiten(spec, args.prewhiten, 0)
+                                    spec[spec<0] = 0
+                                if not os.path.exists(filepath[:-4]+'.mat'):
+                                    print("preprocess LTS first!")
+                                    exit()
+                                LTS = loadmat(filepath[:-4]+'.mat')
+                                LTS_mean = LTS['mean']
+                                LTS_mean = np.tile(LTS_mean[0,1:], (spec.shape[1], 1)).T
+                                # ugly tensor/np conversions to avoid tensor enumerate problem
+                                result_container = np.zeros(spec.shape)
+                                spec = torch.cuda.FloatTensor(spec)
+                                LTS_mean = torch.cuda.FloatTensor(LTS_mean)
+                                masking = T.FrequencyMasking(freq_mask_param=80, iid_masks=False)
+                                #masking_match = T.FrequencyMasking(freq_mask_param=80, iid_masks=False)
+                                randint = np.random.randint(0, high=1000)
+                                randintb = np.random.randint(0, high=1000)
+                                torch.random.manual_seed(randint)
+                                for i in range(4):
+                                    LTS_mean = masking(LTS_mean)
+                                masking = T.FrequencyMasking(freq_mask_param=80, iid_masks=False)
+                                torch.random.manual_seed(randintb)
+                                for i in range(4):
+                                    spec = masking(spec)
+                                masking = T.FrequencyMasking(freq_mask_param=80, iid_masks=False)
+                                torch.random.manual_seed(randint)
+                                save_test(LTS_mean.cpu().numpy(), filename='lts.png')
+                                save_test(spec.cpu().numpy(), filename='lps.png')
+                                spec_T = torch.reshape((spec.T), (-1,1,1,int(FFT_dict['FFTSize']/2+1)))[:,:,:,FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1]]
+                                LTS_mean_T = torch.reshape((LTS_mean.T), (-1,1,1,int(FFT_dict['FFTSize']/2+1)))[:,:,:,FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1]]
+                                #exit()
+                                # NOTE: use for OOM errors so don't have to rewrite dataloader
+                                spec_T = spec_T.detach().cpu().numpy()
+                                LTS_mean_T = LTS_mean_T.detach().cpu().numpy()
+                                iter_hack = spec_T.shape[0]//8
+                                for i in range(1):
+                                    samples = (spec_T[i*iter_hack:(i+1)*iter_hack,:,:,:], LTS_mean_T[i*iter_hack:(i+1)*iter_hack,:,:,:])
+                                    result_container = result_container[:,i*iter_hack:(i+1)*iter_hack]
+                                infer.infer(net, samples, phase, np.array(mean), np.array(std), FFT_dict, result_container, filedir=outdir, filename=test_filename, args=args)
                                 exit()
-                            LTS = loadmat(filepath[:-4]+'.mat')
-                            LTS_mean = LTS['mean']
-                            LTS_mean = np.tile(LTS_mean[0,1:], (1, spec.shape[1]))
-                            #bc griffin-lim inversion needs fft/2+1
-                            if args.model_type == "VQVAE_C":
-                                spec = (spec, LTS_mean)
-                            infer.infer(net, spec, phase, np.array(mean), np.array(std), FFT_dict, filedir=outdir, filename=test_filename, args=args)
-                            exit()
     # TO-DO: fix val_dataloader for proper data iteration
     else:
         net.load_state_dict(torch.load(args.pretrained_path))
