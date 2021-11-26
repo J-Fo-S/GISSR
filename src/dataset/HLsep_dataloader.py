@@ -16,9 +16,10 @@ from scipy.io import loadmat
 
 def save_test(out, filename='test.png'):
     # For plotting headlessly
-    fig = plt.Figure()
-    canvas = FigureCanvas(fig)
-    ax = fig.add_subplot(111)
+    #fig = plt.Figure()
+    #canvas = FigureCanvas(fig)
+    #ax = fig.add_subplot(111)
+    fig, ax = plt.subplots()
     p = librosa.display.specshow(librosa.amplitude_to_db(out, ref=np.max), ax=ax, y_axis='log', x_axis='time', sr=44100, hop_length=128)
     fig.colorbar(p, ax=ax, format="%+2.f dB")
     fig.savefig(filename)
@@ -38,7 +39,7 @@ class HL_dataset(Dataset):
                 print(f'{subdir} {files}')
                 if files: 
                     if not args.preproc_lts:
-                        LTS_run=lts_maker(sensitivity=-100, channel=1, environment='wat', FFT_size=self.FFT_dict['FFTSize'], 
+                        LTS_run=lts_maker(sensitivity=-60, channel=1, environment='wat', FFT_size=self.FFT_dict['FFTSize'], 
                             window_overlap=self.FFT_dict['Hop_length']/self.FFT_dict['FFTSize'], initial_skip=0)
                         LTS_run.collect_folder(path=subdir)
                         LTS_run.filename_check(dateformat='yyyymmdd_HHMMSS',initial='1207984160.',year_initial=2000)
@@ -78,9 +79,9 @@ class HL_dataset(Dataset):
                                 torch.random.manual_seed(randint)
                                 for _ in range(4):
                                     spec_targ[:,i*iter_hack:(i+1)*iter_hack] = masking(spec_targ[:,i*iter_hack:(i+1)*iter_hack])
-                            save_test(LTS_mean.cpu().numpy(), filename='lts_train.png')
-                            save_test(spec.cpu().numpy(), filename='lps_train.png')
-                            save_test(spec_targ.cpu().numpy(), filename='lps_targ.png')
+                            save_test(LTS_mean.cpu().numpy(), filename=self.args.logdir+'/lts_train.png')
+                            save_test(spec.cpu().numpy(), filename=self.args.logdir+'/lps_train.png')
+                            save_test(spec_targ.cpu().numpy(), filename=self.args.logdir+'/lps_targ.png')
                             spec_T = torch.reshape((spec.T), (-1,1,1,int(self.FFT_dict['FFTSize']/2+1)))[:,:,:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
                             spec_targ_T = torch.reshape((spec_targ.T), (-1,1,1,int(self.FFT_dict['FFTSize']/2+1)))[:,:,:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]
                             LTS_mean_T = torch.reshape((LTS_mean.T), (-1,1,1,int(self.FFT_dict['FFTSize']/2+1)))[:,:,:,self.FFT_dict['frequency_bins'][0]:self.FFT_dict['frequency_bins'][1]]

@@ -93,7 +93,7 @@ def infer(net, lps, phase,  mean, std, FFT_dict, result, filedir=None, filename=
     output = output.permute((1,2,3,0))
     output = torch.squeeze(output,0)
     output = torch.squeeze(output,0).detach().cpu()
-    save_test(output, filename='out_test.png')
+    save_test(output, filename=args.logdir+'/out_test.png')
     result[FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1], :] = np.array(output[:, :])
     result = np.sqrt(10**(result*std+mean))
     result = np.multiply(result, phase[:,:result[1].size])

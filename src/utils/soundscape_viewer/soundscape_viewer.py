@@ -406,11 +406,12 @@ class clustering:
     
     # dimension reduction by PCA
     input_data[np.isnan(input_data)]=0
-    pca = PCA(n_components=self.pca_percent)
-    data=pca.fit_transform(input_data)
+    if self.pca_percent>0:
+      pca = PCA(n_components=self.pca_percent)
+      data=pca.fit_transform(input_data)
     
     if self.method=='kmeans':
-      cluster=self.run_kmeans(input_data)
+      cluster=self.run_kmeans(data)
 
     # extract scene features by percentiles
     soundscape_scene = np.zeros((np.max(cluster)+1,), dtype=np.object)

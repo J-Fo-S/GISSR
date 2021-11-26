@@ -20,7 +20,7 @@ import torch
 import torchaudio.transforms as T
 from datetime import datetime
 import numpy as np
-from model import DAE_C, DAE_F, VQVAE, VQVAE_C
+from model import DAE_C, VQVAE, VQVAE_C
 import train_ae, train_vae, infer
 from source_separation import MFA
 from dataset.HLsep_dataloader import hl_dataloader, val_dataloader, prewhiten, save_test
@@ -34,7 +34,7 @@ import sys
 # parser#
 
 parser = argparse.ArgumentParser(description='PyTorch Source Separation')
-parser.add_argument('--model_type', type=str, default='DAE_C', help='model type', choices=['DAE_C', 'DAE_F', 'VQVAE', 'VQVAE_C'])
+parser.add_argument('--model_type', type=str, default='DAE_C', help='model type', choices=['DAE_C', 'VQVAE', 'VQVAE_C'])
 parser.add_argument('--data_feature', type=str, default='lps', help='lps or wavform')
 parser.add_argument('--pretrained', dest='pretrained', default=False, action='store_true', help='load pretrained model or not')
 parser.add_argument('--preproc_lts', dest='preproc_lts', default=False, action='store_true', help='use if need to preprocess lts files')
@@ -113,14 +113,6 @@ DAE_C_dict = {
         "dense": [],
         }
 
-DAE_F_dict = {
-        "frequency_bins": [0, 1024],
-        "encoder": [1024, 512, 256, 128],
-        "decoder": [256, 512, 1024, 1025],
-        "encoder_act": "relu",
-        "decoder_act": "relu",
-        }
-
 #TO-DO: make model dict for VQ-VAE
 VQVAE_dict = {}
 
@@ -128,14 +120,12 @@ VQVAE_C_dict = {}
 
 Model = {
     'DAE_C': DAE_C.autoencoder,
-    'DAE_F': DAE_F.autoencoder,
     'VQVAE': VQVAE.VQVAE,
     'VQVAE_C': VQVAE_C.VQVAE_C
 }
 
 model_dict = {
     'DAE_C': DAE_C_dict,
-    'DAE_F': DAE_F_dict,
     'VQVAE': VQVAE_dict,
     'VQVAE_C': VQVAE_C_dict
 }
@@ -197,7 +187,7 @@ if __name__ == "__main__":
                     print(f'{subdir} {files}')
                     if files: 
                         if not args.preproc_lts:
-                            LTS_run=lts_maker(sensitivity=-100, channel=1, environment='wat', FFT_size=FFT_dict['FFTSize'], 
+                            LTS_run=lts_maker(sensitivity=-60, channel=1, environment='wat', FFT_size=FFT_dict['FFTSize'], 
                                 window_overlap=FFT_dict['Hop_length']/FFT_dict['FFTSize'], initial_skip=0)
                             LTS_run.collect_folder(path=subdir)
                             LTS_run.filename_check(dateformat='yyyymmdd_HHMMSS',initial='1207984160.',year_initial=2000)
@@ -232,8 +222,8 @@ if __name__ == "__main__":
                                     spec = masking(spec)
                                 masking = T.FrequencyMasking(freq_mask_param=80, iid_masks=False)
                                 torch.random.manual_seed(randint)
-                                save_test(LTS_mean.cpu().numpy(), filename='lts.png')
-                                save_test(spec.cpu().numpy(), filename='lps.png')
+                                save_test(LTS_mean.cpu().numpy(), filename=args.logdir+'/lts_test.png')
+                                save_test(spec.cpu().numpy(), filename=args.logdir+'/lps_test.png')
                                 spec_T = torch.reshape((spec.T), (-1,1,1,int(FFT_dict['FFTSize']/2+1)))[:,:,:,FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1]]
                                 LTS_mean_T = torch.reshape((LTS_mean.T), (-1,1,1,int(FFT_dict['FFTSize']/2+1)))[:,:,:,FFT_dict['frequency_bins'][0]:FFT_dict['frequency_bins'][1]]
                                 #exit()

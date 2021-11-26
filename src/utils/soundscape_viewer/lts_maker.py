@@ -233,7 +233,6 @@ class lts_maker:
   def save_lts_separate(self, num_file, folder_id=[], status_print=True):
     for i in range(num_file):
       savemat(os.path.join(folder_id, self.audioname[i])[:-4]+'.mat', {'mean':self.Result_mean[i,:], 'median':self.Result_median[i,:]})
-      print(self.Result_median[i,:5])
       print('Successifully save to '+self.audioname[i])
     
   def run(self, save_filename=None, folder_id=[], file_begin=0, num_file=[], duration_read=[]):
@@ -272,7 +271,7 @@ class lts_maker:
         with audioread.audio_open(path+'/'+self.audioname[file]) as temp:
           sf=temp.samplerate
       x, self.sf = librosa.load(path+'/'+self.audioname[file], sr=sf)
-      #print(x[5000:5005])
+      print(x[5000:5005])
 
       if duration_read:
         total_segment=int(np.ceil(len(x)/sf/duration_read))
